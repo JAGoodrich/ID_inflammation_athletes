@@ -1,0 +1,873 @@
+---
+title: "XC Figures"
+author: "Jesse Goodrich"
+date: "12/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.width=8, fig.height = 6.5, cache = FALSE)
+library(tidyverse)
+library(table1)
+library(emmeans)
+library(brglm)
+library(ggpmisc)
+library(car)
+library(gridExtra)
+library(lmerTest)
+library(grid)
+library(gtools)
+library(MuMIn)
+library(cowplot)
+library(broom)
+library(broom.mixed)
+library(janitor)
+library(nlme)
+
+# Set ggplot theme
+theme_set(theme_cowplot())
+source(here::here("scripts", "!directories.r"))
+source(here::here("scripts", "!load_xc_data.r"))
+source(here::here("scripts", "!functions.r"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Table 2
+```{r Table 2}
+table(id$iron_def_acute , id$sex)
+with(id %>% filter(sex == "Female", ery < 100), hist(stfr))
+
+id <- id %>% 
+  mutate(male_female_iron_def = if_else((iron_def_acute == "ID") & (sex == "Male"), "ID", as.character(acute_chronic_id)))
+
+table1::table1(~ hgb + hct + ferritin + hepcidin + 
+                 stfr + ery_cor + bili + percent_retic + IL1a + IL1b + IL2 + 
+                 IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa  | sex + male_female_iron_def,
+               data = id,
+               overall = FALSE)
+ggplot(id, aes(cpk)) + 
+  geom_density() + 
+  facet_wrap(~sex, nrow = 2)
+
+# Normal Vars
+summaryBy(formula = hgb + hct + percent_retic + ferritin +  
+            stfr + bili + cpk + ldh~ sex * male_female_iron_def,
+          data = id %>%
+            as.data.frame(),
+          FUN = function(x){avg_sd_fxn(x, include.n = FALSE, n.digits = 0)}, 
+          keep.names = TRUE) %>%
+  as_tibble() %>% t() %>% noquote()
+
+# Non normal vars
+summaryBy(formula = hepcidin + ery_cor + IL1a + IL1b + IL2 +  
+            IL4 + IL6 +IL8 + IL10 + IL12p70 + IFNg + TNFa ~ sex * male_female_iron_def, 
+          
+          data = id %>%
+            as.data.frame(),
+          FUN = function(x){paste(sprintf("%.1f", round(median(x, na.rm = T), 1)), 
+                                  " (",
+                                  sprintf("%.1f", round(IQR(x, na.rm = T), 1)), 
+                                  ")",  sep = "")
+          }, 
+          keep.names = TRUE) %>%
+  as_tibble() %>% t() %>% noquote()
+
+
+```
+
+Sup table 1
+```{r Table 2}
+table(id$acute_chronic_id_group , id$sex)
+
+table1::table1(~ hepcidin | sex * nationals,
+               data = fsd,
+               overall = FALSE)
+
+library(flextable)
+
+summaryBy(formula = hgb + hct + ferritin + hepcidin + 
+            stfr + ery_cor + bili + percent_retic + IL1a + IL1b + IL2 + 
+            IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa ~ sex,
+          data = fsd %>%
+            as.data.frame(),
+          FUN = function(x){avg_sd_fxn(x, include.n = FALSE)}, 
+          keep.names = TRUE) %>%
+  as_tibble() %>% t() %>% noquote()
+
+
+table(id$iron_def_avg)
+summaryBy(formula = hgb + hct + ferritin + hepcidin + stfr +
+            ery_cor + bili + percent_retic + IL1a + IL1b + IL2 +  
+            IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa ~ sex * nationals, 
+          
+          data = fsd %>%
+            as.data.frame(),
+          FUN = function(x){paste(sprintf("%.1f", round(median(x, na.rm = T), 1)), 
+                                  " (",
+                                  sprintf("%.1f", round(IQR(x, na.rm = T), 1)), 
+                                  ")",  sep = "")
+          }, 
+          keep.names = TRUE) %>%
+  as_tibble() %>% t() %>% noquote()
+
+library(tableone)
+
+myvars <- c("hgb", "hct", "ferritin", "hepcidin", "stfr",
+            "ery_cor", "bili", "percent_retic", "IL1a", "IL1b", "IL2", 
+            "IL4", "IL6", "IL8", "IL10", "IL12p70", "IFNg", "TNFa")
+
+nonnormal <- c("hepcidin", "ery_cor", "IL1a", "IL1b", "IL2", 
+               "IL4", "IL6", "IL8", "IL10", "IL12p70", "IFNg", "TNFa")
+
+
+tab3 <- CreateTableOne(vars = myvars, 
+                       strata = "nationals" , 
+                       data = fsd %>% filter(sex == "Female"))
+print(tab3, nonnormal = nonnormal, formatOptions = list(big.mark = ","))
+
+
+data %>% 
+  filter(!is.na(hct), sex == "Male") %>%
+  summarise(pct = (sum(hct > 51.0 | hct < 37.5)/length(hct)))
+
+data %>% 
+  filter(!is.na(hct), sex == "Female") %>%
+  summarise(pct = (sum(hct > 46.6 | hct < 34.0)/length(hct)))
+
+
+```
+
+
+
+Figure 1
+```{r figure 1, echo = FALSE, message = FALSE, warning=FALSE}
+##  Chronic  ################################################   
+chronic_mod <- brglm(iron_def_avg ~   sex,
+                     data = fsd %>% droplevels(),
+                     family = binomial(link = "logit"))
+
+
+# summary(mod)
+chronic_means <- emmeans(chronic_mod, ~  sex, type = "response") %>% 
+  as_tibble() %>% 
+  filter(!is.na(prob)) %>% 
+  mutate_if(is.numeric, function(x){100*x}) %>% 
+  mutate(id = "A) Chronic ID")
+
+
+##  Acute  ################################################  
+
+acute_mod <- brglm(iron_def_once ~  sex,
+                   data = fsd %>% filter(group != "Controls") %>% droplevels(),
+                   family = binomial(link = "logit"))
+# summary(mod)
+acute_means <- emmeans(acute_mod, ~  sex, type = "response") %>% 
+  as_tibble() %>% 
+  filter(!is.na(prob)) %>% 
+  mutate_if(is.numeric, function(x){100*x}) %>% 
+  mutate(id = "B) Acute or Chronic ID")
+
+
+means <- rbind(acute_means, chronic_means) %>% mutate(id = as_factor(id) %>% fct_relevel("A) Chronic ID"))
+
+# x <- emmeans(mod, pairwise ~ nationals, type = "response")
+# confint(x)
+# Graph
+
+
+
+# Create annotations
+
+anno <- data.frame(x1 = c(1.7), x2 = c(2.3),
+                   y1 = c(70), y2 = c(72), 
+                   xstar = c(2), ystar = c(78),
+                   lab = c("†"),
+                   nationals = c("NCAA Qualifiers"),
+                   id = c("B) Acute or Chronic ID"),
+                   sex = c("Female"))
+
+qualif <- data.frame(xstar = c(2), ystar = c(75),
+                     lab = c("*"),
+                     group = c(1),
+                     # nationals = c("NCAA Qualifiers"), 
+                     id = c("B) Acute or Chronic ID"),
+                     sex = c("Female"))
+
+
+
+
+(fig_1_xc <- ggplot(means, aes(y = prob, x = sex)) +
+    geom_bar(stat ='identity', 
+             # position = position_dodge(.95), 
+             color = "black", fill="grey90") +
+    geom_errorbar(aes(ymin=asymp.LCL, ymax=asymp.UCL),
+                  width=.04,
+                  # position = position_dodge(.95)
+    )+
+    coord_cartesian(ylim = c(0,100)) +
+    ylab("Percent of Group (%)") +
+    xlab(NULL) + 
+    facet_wrap(~id) + 
+    theme(strip.text.x = element_text(hjust = -.01),
+          axis.text.x = element_text(angle = 45, 
+                                     vjust = 1,
+                                     hjust = 1, 
+                                     size  = 15), 
+          legend.position = "right") + 
+    geom_text(data = qualif, aes(x = xstar,  y = ystar, label = lab),
+              color = "black", size = 9))
+
+n <- 1
+dir_fig <- "C:/Users/jagoodri/OneDrive - University of Southern California/AESL/Pac12 Research/" 
+ggsave(plot = fig_1_xc, paste(dir_fig, 
+                              "Manuscripts/XC Biomarkers/XC_Figure_2.jpg", sep =""),
+       width = n*5.5, height = n*6)
+
+rm(anno, qualif)
+here::here()
+
+```
+
+
+
+# Ferritin 
+```{r average ferritin, echo = FALSE, message = FALSE, warning=FALSE}
+anno <- data.frame(xstar = c(2,2,3), ystar = c(30, 30, 30),
+                   lab = c("*", "*","*"), sex = c("Male", "Female", "Female"))
+
+(fer <- ggplot(id %>% filter(!is.na(acute_chronic_id_group)), 
+               aes(y = ferritin, x = acute_chronic_id_group, fill = sex)) + 
+    geom_boxplot(outlier.alpha = .3) +
+    geom_hline(yintercept = 25, linetype = 2, color = "grey20") + 
+    ylab("Ferritin (ng/mL)") + 
+    xlab(NULL) + 
+    scale_y_log10(breaks = c(10,25,50,100,175)) +
+    theme(axis.text.x = element_blank(),
+          legend.position = "none",
+          strip.text.x = element_text(size = 15),
+          plot.title = element_text(size=20, hjust = -.1)) +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    ggtitle("A)")+ 
+    geom_text(data = anno, aes(x = xstar,  y = ystar, label = lab), inherit.aes = FALSE,
+              color = "black", size = 9))
+```
+
+
+# sTfR / Ferritin ratio   
+**Higher sTfR/log ferritin ratio indicate Iron Deficiency**    
+* Controls higher than other groups
+* Both Acute and Chronic ID XC are higher than non ID XC
+```{r sTfR fer, echo = FALSE, message = FALSE, warning=FALSE}
+
+anno <- data.frame(xstar = c(2,2,3), ystar = c(11, 12,11),
+                   lab = c("*", "*","*"), sex = c("Male", "Female", "Female"))
+
+
+(stfrfer <- ggplot(id, 
+                   aes(y = stfr, x = acute_chronic_id_group, fill = sex)) +
+    geom_boxplot(outlier.alpha = .3) +
+    xlab(NULL)  +
+    theme(axis.text.x = element_blank(),
+          legend.position = "none",
+          strip.text.x = element_text(size = 15),
+          plot.title = element_text(size=20, hjust = -.1)) +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    ggtitle("B)")+  
+    scale_y_log10()+
+    ylab("sTfR"))
+```
+
+Hb concentration
+```{r average hemoglobin concentration, echo = FALSE, message = FALSE, warning=FALSE}
+anno <- data.frame(xstar = c(2, 2,3), ystar = c(17, 16.5, 16),
+                   lab = c("*", "*", "**"), sex = c("Male", "Female", "Female"))
+hb_ref <- tibble(sex = factor(c("Male", "Female"), levels = c("Male", "Female")), lower_limit = c(13.5, 12.5))
+
+
+
+(hb <- ggplot(id,
+              aes(y = hgb, x = acute_chronic_id_group, fill = sex)) + 
+    geom_boxplot(outlier.alpha = .3) +
+    # geom_jitter() +
+    geom_hline(data = hb_ref, 
+               aes(yintercept = lower_limit), 
+               linetype = 2, 
+               color = "grey20") +
+    coord_cartesian(ylim = c(11, 19)) +
+    ylab("[Hb] (g/dL)") +
+    xlab(NULL) + 
+    theme(axis.text.x = element_blank(),
+          legend.position = "none",
+          axis.text.y = element_text(margin = margin( l = 2)),
+          strip.text.x = element_text(size = 15),
+          plot.title = element_text(size=20, hjust = -.1)) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    scale_y_continuous(breaks = c(12,14, 16,18)) +
+    ggtitle("B)")+
+    geom_text(data = anno, aes(x = xstar,  y = ystar, label = lab), inherit.aes = FALSE,
+              color = "black", size = 9))
+
+```
+
+# Hepcidin   
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+anno <- data.frame(xstar = c(2, 2, 3), ystar = c(50, 280,75),
+                   lab = c("*", "*", "*"), sex = c("Male", "Female", "Female"))
+
+(hep <- ggplot(id, 
+               aes(y = hepcidin, x = acute_chronic_id_group, fill = sex)) + 
+    geom_boxplot(outlier.alpha = .3) +
+    ylab( "Hepcidin (ng/mL)") +
+    xlab(NULL) + 
+    scale_y_log10(limits = c(5, 300)) +
+    theme(legend.position = "none",
+          strip.text.x = element_blank(),
+          axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+          plot.title = element_text(size=20, hjust = -.1)) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    ggtitle("C)")+
+    geom_text(data = anno, aes(x = xstar,  y = ystar, label = lab), inherit.aes = FALSE,
+              color = "black", size = 9))
+```
+
+
+
+
+
+# Erythroferrone
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+
+(erfe <- ggplot(id %>% filter(ery_cor > 0.1), 
+                aes(y = ery_cor, x = acute_chronic_id_group, fill = sex)) + 
+   geom_boxplot(outlier.alpha = .3) +
+   ylab("Erythroferrone (ng/mL)") +
+   xlab(NULL) + 
+   scale_y_log10() +
+   theme(legend.position = "none",
+         strip.text.x = element_blank(),
+         axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+         plot.title = element_text(size=20, hjust = -.1)) +
+   facet_grid(~sex, scales = "free_x", space = "free_x") +
+   scale_fill_manual(values = c("grey50", "grey90")) +
+   ggtitle("E)"))
+```
+
+# IL-6 
+
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+(IL6 <- ggplot(id, 
+               aes(y = IL6, x = acute_chronic_id_group, fill = sex)) + 
+   geom_boxplot(outlier.alpha = .3) +
+   ylab( "IL-6 (pg/mL)") +
+   xlab(NULL) + 
+   scale_y_log10() +
+   theme(legend.position = "none",
+         strip.text.x = element_blank(),
+         axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+         plot.title = element_text(size=20, hjust = -.1)) +
+   facet_grid(~sex, scales = "free_x", space = "free_x") +
+   scale_fill_manual(values = c("grey50", "grey90")) +
+   ggtitle("D)"))
+```
+
+
+# LDH
+
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+(LDH <- ggplot(id,
+               aes(y = ldh, x = acute_chronic_id_group, fill = sex)) +
+   geom_boxplot(outlier.alpha = .3) +
+   ylab( "LDH (IU/L)") +
+   xlab(NULL) +
+   scale_y_log10() +
+   theme(legend.position = "none",
+         strip.text.x = element_blank(),
+         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 15),
+         plot.title = element_text(size=20, hjust = -.1)) +
+   facet_wrap(~sex, scales = "free_x")+
+   scale_fill_manual(values = c("grey50", "grey90")))
+```
+
+
+
+# Figure 2
+
+```{r figure 2, fig.height= 12, fig.width = 5, echo = FALSE, message = FALSE, warning=FALSE}
+
+
+grid::grid.newpage()
+
+# For all 6 plots: 
+# grobz <- lapply(list(fer, stfrfer, hb, hep, erfe, IL6), ggplotGrob)
+# 
+# grobz.plot <- arrangeGrob( grobs = list(rbind(grobz[[1]], grobz[[4]], size = "last"),
+#                                         rbind(grobz[[2]], grobz[[5]], size = "last"), 
+#                                         rbind(grobz[[3]], grobz[[6]], size = "last")),
+#                            ncol = 3)
+# grid.draw(grobz.plot)
+
+
+grid::grid.newpage()
+grobz <- lapply(list(fer, hb, hep, IL6), ggplotGrob)
+
+grobz.plot <- arrangeGrob( grobs = list(rbind(grobz[[1]], grobz[[3]], size = "last"),
+                                        rbind(grobz[[2]], grobz[[4]], size = "last")),
+                           ncol = 2)
+grid.draw(grobz.plot)
+
+
+n = 1.2
+ggsave(plot = grobz.plot, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/XC_Figure_2.jpg", width = n*10, height = n*6)
+
+# grid.arrange(fer, stfrfer, hb, hep, erfe, IL6, nrow = 2)
+
+```
+
+
+
+Figure 3
+```{r figure 3, fig.height= 12, fig.width = 5, echo = FALSE, message = FALSE, warning=FALSE}
+library(pROC)
+library(OptimalCutpoints)
+library(fANCOVA)
+library(cutpointr)
+
+
+table(id$iron_def_once, (id$id_group))
+
+## Male ############################################ ############################################ ############################################
+
+
+male_roc <- pROC::roc(iron_def_once ~ hepcidin, ci = TRUE,
+                      data =  id %>% filter(sex == "Male") %>% 
+                        droplevels())
+
+# ci.sp.obj.male <- ci.sp(smooth(male_roc, method = "density", bw = .25), sensitivities=seq(0, 1, .01), boot.n=100)
+
+
+male_cp <- cutpointr(as.data.frame(id %>% filter(sex == "Male")),
+                     hepcidin,
+                     iron_def_once, na.rm = TRUE,
+                     method = maximize_boot_metric, boot_runs = 100, metric = youden)
+
+
+se <- male_cp$sensitivity %>% round(., 2)
+sp <- male_cp$specificity%>% round(., 2)
+auc <- male_cp$AUC
+oc <- male_cp$optimal_cutpoint
+auc.cl <- cutpointr::boot_ci(male_cp,  AUC, in_bag = TRUE, alpha = 0.05)$values
+
+cutpointr::boot_ci(male_cp,  specificity, in_bag = TRUE, alpha = 0.05)$values
+# plot(oco, which = 1)
+
+
+
+
+dev.off()
+par(mfrow = c(1,2), cex = 1.1)
+# table(ci.data$xmax, ci.data$xmin)
+plot(smooth(male_roc, method = "density", bw = .25))
+
+plot(ci.sp.obj.male, type = "shape", col = grey(level = .5, alpha=.25), border = "grey90")
+segments(x0 =se , x1 = se, y0 = 0, y1 =  sp , lty = 2)
+segments(x0 = se, x1 = 1, y0 = sp, y1 = sp, lty = 2)
+points(x = se, y = sp, pch = 19,cex = 1.5)
+text(x = .3, y = .1, labels = paste("AUC: ", round(auc, 2), "\n[95% CI: ", round(auc.cl[1], 2), " - ",  round(auc.cl[2], 2), "]", sep = "" ))
+text(x = .6, y = .53, labels = paste("Optimal Cut Point:\n", round(oc, 1), " ng/mL\n", "Sens: ", se, "\nSpec:", sp, sep = ""), cex = .9)
+title("Male: ID vs. Non ID", line = 2.5)
+
+
+
+# Female, All ID ############################################ ############################################ ############################################
+
+id <- id %>% 
+  mutate(id_group = fct_collapse(acute_chronic_id, not_id = c("Acute ID", "Chronic ID")))
+
+
+fem_roc <- pROC::roc(iron_def_once ~ hepcidin, ci = TRUE,
+                     data =  id %>% filter(sex == "Female") %>% 
+                       droplevels())
+
+# ci.sp.fem.all <- ci.sp(smooth(fem_roc,  method = "density", bw = .1), sensitivities=seq(0, 1, .01), boot.n=100)
+
+
+# fem_cp <- cutpointr(as.data.frame(id %>% filter(sex == "Female")),
+#                     hepcidin,
+#                     iron_def_once,
+#                      na.rm = TRUE,
+#                      method = maximize_boot_metric, boot_runs = 100, metric = youden)
+
+
+# fem_cp   
+
+cutpointr::boot_ci(fem_cp,  AUC, in_bag = TRUE, alpha = 0.05)
+
+se <- fem_cp$sensitivity %>% round(., 2)
+sp <- fem_cp$specificity%>% round(., 2)
+auc <- fem_cp$AUC
+oc <- fem_cp$optimal_cutpoint
+auc.cl <- cutpointr::boot_ci(fem_cp,  AUC, in_bag = TRUE, alpha = 0.05)$values
+
+
+
+# table(ci.data$xmax, ci.data$xmin)
+plot(smooth(fem_roc, method = "density", bw = .05))
+
+plot(ci.sp.fem.all, type = "shape", col = c(grey(level = .5, alpha=.25)), border = "grey90")
+segments(x0 =se , x1 = se, y0 = 0, y1 =  sp , lty = 2)
+segments(x0 = se, x1 = 1, y0 = sp, y1 = sp, lty = 2)
+points(x = se, y = sp, pch = 19,cex = 1.5)
+text(x = .3, y = .1, labels = paste("AUC: ", round(auc, 2), "\n[95% CI: ", round(auc.cl[1], 2), " - ",  round(auc.cl[2], 2), "]", sep = "" ))
+text(x = .55, y = .6, labels = paste("Optimal Cut Point:\n", round(oc, 1), " ng/mL\n", "Sens: ", se, "\nSpec:", sp, sep = ""), cex = .9)
+title("Female: ID vs. Non ID", line = 2.5)
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Statistial analysis
+
+```{r}
+library(lolcat)
+library(sjstats)
+library(performance)
+library(lattice)
+library(car)
+
+
+table(id$ferritin < 25, id$iron_def_once)
+
+
+id$iron_def_avg
+# Transform and scale numeric variables of interest
+dsl <- id %>% 
+  select(iron_def_once, nationals, id, sex, hgb, ferritin, hepcidin, 
+         stfr, ery_cor, bili, percent_retic, IL1a, IL1b, IL2, 
+         IL4, IL6,IL8, IL10,  IL12p70, IFNg, TNFa) %>% 
+  mutate_at(vars(hgb:TNFa), function(x){yjPower(x, 0) %>% scale(.) }) %>%
+  ungroup()
+
+
+
+# Data L 
+data.l <- dsl   %>% 
+  select(iron_def_once, nationals, id, sex, hgb, ferritin, hepcidin, 
+         stfr, ery_cor, bili, percent_retic, IL1a, IL1b, IL2, 
+         IL4, IL6,IL8, IL10,  IL12p70, IFNg, TNFa) %>% 
+  pivot_longer(., hgb:TNFa, names_to = "parameter") %>% 
+  # filter(sex == "Female") %>% 
+  group_by(parameter) %>% droplevels()
+
+
+
+############ Run All Stats ############ 
+output <- data.l %>% 
+  do(Anova(lm(value ~ nationals * sex, data = .)) %>% as_tibble(., rownames = "factor"))
+
+
+
+output <- output %>%
+  janitor::clean_names() %>%
+  select(-f_value, -df, - sum_sq) %>%
+  pivot_wider(.,names_from = factor, values_from = pr_f) %>% 
+  ungroup() %>%
+  mutate_if(is.numeric, function(x){round(x, digits = 2)}) %>% 
+  arrange(factor(parameter, levels = c( "hgb",  "ferritin",  "hepcidin",  "stfr",  "ery_cor",  "bili",  "percent_retic", 
+                                        "IL1a",  "IL1b",  "IL2",  "IL4",  "IL6",  "IL8",  "IL10",  "IL12p70",  "IFNg",  "TNFa")))
+
+# IL1a + IL1b + IL2 +  IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa 
+
+output <- data.l %>%
+  do(emmeans(lm(value ~ time_point * group + (1|id), data = .), pairwise ~ time_point)$contrasts %>% as_tibble(.))
+
+
+
+
+
+
+
+library(sjstats)
+library(performance)
+library(lattice)
+
+## Run all stats for over time ## 
+
+dsl_time <- data %>% 
+  select(date, id, sex, #hgb, ferritin, hepcidin,  stfr, ery_cor, bili, percent_retic, 
+         IL1a, IL1b, IL2, 
+         IL4, IL6,IL8, IL10,  IL12p70, IFNg, TNFa) %>% 
+  mutate_at(vars(IL1a:TNFa), function(x){yjPower(x, 0) %>% scale(.) }) %>%
+  ungroup()
+
+
+
+# Data L 
+data_l_time <- dsl_time   %>% 
+  select(date, id, sex,  #hgb, ferritin, hepcidin,  stfr, ery_cor, bili, percent_retic, 
+         IL1a, IL1b, IL2, 
+         IL4, IL6,IL8, IL10,  IL12p70, IFNg, TNFa) %>% 
+  pivot_longer(., IL1a:TNFa, names_to = "parameter") %>% 
+  # filter(sex == "Female") %>% 
+  group_by(parameter, sex) %>% droplevels()
+
+
+
+
+
+############ Run over time Stats ############ 
+output_time <- data_l_time %>% 
+  do(Anova(lmer(value ~ date + (1|id), data = .)) %>% as_tibble(., rownames = "factor"))
+
+
+
+output_time <- output_time %>%
+  janitor::clean_names() %>%
+  select(--chisq, -df, ) %>%
+  pivot_wider(.,names_from = factor, values_from = pr_chisq) %>% 
+  ungroup() %>%
+  mutate_if(is.numeric, function(x){round(x, digits = 4)}) %>% 
+  arrange(sex, factor(parameter, levels = c( "hgb",  "ferritin",  "hepcidin",  "stfr",  "ery_cor",  "bili",  "percent_retic", 
+                                             "IL1a",  "IL1b",  "IL2",  "IL4",  "IL6",  "IL8",  "IL10",  "IL12p70",  "IFNg",  "TNFa")))
+
+
+## Obtain Model Performance Data  
+output_time <- data_l_time %>% 
+  do(model_performance(lmer(value ~ date + (1|id), data = .)) %>% as_tibble(.))
+
+
+temp <- output_time %>%
+  janitor::clean_names() %>%
+  select(-aic, -bic, -icc, -rmse )  %>% 
+  ungroup() %>%
+  rename(total = r2_conditional, 
+         fixed = r2_marginal) %>% 
+  mutate(random = total-fixed) %>% 
+  mutate_if(is.numeric, function(x){round(x, digits = 4)}) %>% 
+  arrange(sex, factor(parameter, levels = c( "hgb",  "ferritin",  "hepcidin",  "stfr",  "ery_cor",  "bili",  "percent_retic", 
+                                             "IL1a",  "IL1b",  "IL2",  "IL4",  "IL6",  "IL8",  "IL10",  "IL12p70",  "IFNg",  "TNFa")))
+
+# performance::icc(mod, robust = TRUE)
+
+
+
+
+
+# model_performance(mod)
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+# Figures for presentation
+
+
+# Ferritin 
+```{r average ferritin, echo = FALSE, message = FALSE, warning=FALSE}
+anno <- data.frame(xstar = c(2,2,3), ystar = c(30, 30, 30),
+                   lab = c("*", "*","*"), sex = c("Male", "Female", "Female"))
+
+(fer <- ggplot(id %>% filter(!is.na(acute_chronic_id_group)), 
+               aes(y = ferritin, x = acute_chronic_id_group, fill = sex)) + 
+    geom_boxplot(outlier.alpha = .3) +
+    geom_hline(yintercept = 25, linetype = 2, color = "grey20") + 
+    ylab("Ferritin (ng/mL)") + 
+    xlab(NULL) + 
+    scale_y_log10(breaks = c(10,25,50,100,175)) +
+    theme(#axis.text.x = element_blank(),
+      legend.position = "none",
+      axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+      
+      strip.text.x = element_text(size = 15),
+      plot.title = element_text(size=20)) +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    geom_text(data = anno, aes(x = xstar,  y = ystar, label = lab), inherit.aes = FALSE,
+              color = "black", size = 9))
+ggsave(plot = fer, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/ferritin.jpg", width = 5.5, height = 6)
+
+```
+
+
+Hb concentration
+```{r average hemoglobin concentration, echo = FALSE, message = FALSE, warning=FALSE}
+anno <- data.frame(xstar = c(2, 2,3), ystar = c(17, 16.5, 16), 
+                   lab = c("*", "*", "**"), sex = c("Male", "Female", "Female"))
+hb_ref <- tibble(sex = factor(c("Male", "Female"), levels = c("Male", "Female")), lower_limit = c(13.5, 12.5))
+
+
+
+(hb <- ggplot(id,
+              aes(y = hgb, x = acute_chronic_id_group, fill = sex)) + 
+    geom_boxplot(outlier.alpha = .3) +
+    # geom_jitter() +
+    geom_hline(data = hb_ref, 
+               aes(yintercept = lower_limit), 
+               linetype = 2, 
+               color = "grey20") +
+    coord_cartesian(ylim = c(11, 19)) +
+    ylab("[Hb] (g/dL)") +
+    xlab(NULL) + 
+    theme(         axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+                   legend.position = "none",
+                   axis.text.y = element_text(margin = margin( l = 2)),
+                   strip.text.x = element_text(size = 15),
+                   plot.title = element_text(size=20, hjust = -.1)) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    scale_y_continuous(breaks = c(12,14, 16,18)) +
+    geom_text(data = anno, aes(x = xstar,  y = ystar, label = lab), inherit.aes = FALSE,
+              color = "black", size = 9))
+ggsave(plot = hb, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/hb.jpg", width = 5.5, height = 6)
+
+```
+
+# Hepcidin   
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+anno <- data.frame(xstar = c(2, 2, 3), ystar = c(50, 280,75),
+                   lab = c("*", "*", "*"), sex = c("Male", "Female", "Female"))
+
+(hep <- ggplot(id, 
+               aes(y = hepcidin, x = acute_chronic_id_group, fill = sex)) + 
+    geom_boxplot(outlier.alpha = .3) +
+    ylab( "Hepcidin (ng/mL)") +
+    xlab(NULL) + 
+    scale_y_log10(limits = c(5, 300)) +
+    theme(legend.position = "none",
+          strip.text.x = element_text(size = 15),
+          
+          axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+          plot.title = element_text(size=20, hjust = -.1)) +
+    facet_grid(~sex, scales = "free_x", space = "free_x") +
+    scale_fill_manual(values = c("grey50", "grey90")) +
+    geom_text(data = anno, aes(x = xstar,  y = ystar, label = lab), inherit.aes = FALSE,
+              color = "black", size = 9))
+
+ggsave(plot = hep, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/hepcidin.jpg", width = 5.5, height = 6)
+
+```
+
+
+
+
+
+# Erythroferrone
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+
+(erfe <- ggplot(id %>% filter(ery_cor > 0.1), 
+                aes(y = ery_cor, x = acute_chronic_id_group, fill = sex)) + 
+   geom_boxplot(outlier.alpha = .3) +
+   ylab("Erythroferrone (ng/mL)") +
+   xlab(NULL) + 
+   scale_y_log10() +
+   theme(legend.position = "none",
+         strip.text.x = element_text(size = 15),
+         
+         axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+         plot.title = element_text(size=20, hjust = -.1)) +
+   facet_grid(~sex, scales = "free_x", space = "free_x") +
+   scale_fill_manual(values = c("grey50", "grey90")) )
+
+ggsave(plot = erfe, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/erfe.jpg", width = 5.5, height = 6)
+
+```
+
+# IL-6 
+
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+(IL6 <- ggplot(id, 
+               aes(y = IL6, x = acute_chronic_id_group, fill = sex)) + 
+   geom_boxplot(outlier.alpha = .3) +
+   ylab( "IL-6 (pg/mL)") +
+   xlab(NULL) + 
+   scale_y_log10() +
+   theme(legend.position = "none",
+         
+         axis.text.x = element_text(angle = 0, vjust = 0., hjust = 0.5, size = 13), 
+         plot.title = element_text(size=20, hjust = -.1)) +
+   facet_grid(~sex, scales = "free_x", space = "free_x") +
+   scale_fill_manual(values = c("grey50", "grey90")))
+ggsave(plot = IL6, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/IL6.jpg", width = 5.5, height = 6)
+
+```
+
+
+
+# Figure 2 for presentation
+
+```{r figure 2, fig.height= 12, fig.width = 5, echo = FALSE, message = FALSE, warning=FALSE}
+
+
+grid::grid.newpage()
+
+# For all 6 plots: 
+# grobz <- lapply(list(fer, stfrfer, hb, hep, erfe, IL6), ggplotGrob)
+# 
+# grobz.plot <- arrangeGrob( grobs = list(rbind(grobz[[1]], grobz[[4]], size = "last"),
+#                                         rbind(grobz[[2]], grobz[[5]], size = "last"), 
+#                                         rbind(grobz[[3]], grobz[[6]], size = "last")),
+#                            ncol = 3)
+# grid.draw(grobz.plot)
+
+
+grid::grid.newpage()
+grobz <- lapply(list(fer, hb, hep, IL6), ggplotGrob)
+
+grobz.plot <- arrangeGrob( grobs = list(rbind(grobz[[1]], grobz[[3]], size = "last"),
+                                        rbind(grobz[[2]], grobz[[4]], size = "last")),
+                           ncol = 2)
+grid.draw(grobz.plot)
+
+
+n = 1.2
+ggsave(plot = grobz.plot, "~/AESL/Pac12 Research/Manuscripts/XC Biomarkers/XC_Figure_2.jpg", width = n*10, height = n*6)
+
+# grid.arrange(fer, stfrfer, hb, hep, erfe, IL6, nrow = 2)
+
+```
+
+
+
+
