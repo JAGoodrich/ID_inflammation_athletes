@@ -28,12 +28,7 @@ library(nlme)
 theme_set(theme_cowplot())
 source(here::here("!directories.r"))
 source(here::here("!load_xc_data.r"))
-source(here::here("!functions.r"))
 ```
-
-
-
-
 
 
 Table 2
