@@ -4,7 +4,7 @@
 dir_home <- dirname(here::here())
 
 
-dir_xcfig <- here::here("XC Analysis", "figures")
+dir_xcfig <- here::here("figures")
 # # raw data folder
 # dir_data <- fs::path(dir_home, "0_Data")
 # 

@@ -3,7 +3,7 @@ proteins <- c("IFNg","IL1a","IL1b","IL2","IL4",
               "IL6","IL8","IL10","IL12p70","TNFa", "ery")
 
 # Full xc_data
-xc_data <- read_rds(here::here("FBV_data_for_analysis 1119.RDS")) %>% 
+xc_data <- read_rds(fs::path(dir_home,"FBV_data_for_analysis 1119.RDS")) %>% 
   filter(group == "Cross Country") %>% 
   droplevels() %>% 
   janitor::remove_empty(which = "cols")  %>% 

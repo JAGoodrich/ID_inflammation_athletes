@@ -26,18 +26,10 @@ library(nlme)
 
 # Set ggplot theme
 theme_set(theme_cowplot())
-source(here::here("scripts", "!directories.r"))
-source(here::here("scripts", "!load_xc_data.r"))
-source(here::here("scripts", "!functions.r"))
+source(here::here("!directories.r"))
+source(here::here("!load_xc_data.r"))
+source(here::here("!functions.r"))
 ```
-
-
-
-
-
-
-
-
 
 
 
