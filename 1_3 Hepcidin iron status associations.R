@@ -38,7 +38,7 @@ mod_output_hep_id <- xc_data %>%
 
 
 #View info about the one outlier participant
-View(xc_data %>% select(id, visit,sex, hepcidin, ferritin, stfr, id_peeling))
+# View(xc_data %>% select(id, visit,sex, hepcidin, ferritin, stfr, id_peeling))
 
 
 # Ferritin vs. Hepcidin -------------------------

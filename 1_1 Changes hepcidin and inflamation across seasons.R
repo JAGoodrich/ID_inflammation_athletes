@@ -14,14 +14,13 @@ mod_output <- xc_data %>%
   group_by(sex, outcome) %>% 
   nest() %>% 
   mutate(
-    # Run Ferritin Models
     model = map(data, 
                 ~lme(log(outcome_value) ~ as.factor(date), 
                      random = ~1|id, 
                      correlation = corExp(form=~test_number|id),
                      data = . )))
 
-## Examine residual plots, by hand (change "1" to examine different models) -------------
+## Examine residual plots by hand (change "1" for different models) -------------
 i = 1
 plot(mod_output$model[[i]])
 # Normal plot of standardized residuals by gender
@@ -215,46 +214,6 @@ mod_ests_final <- mod_ests_final %>%
    scale_y_log10() +
    labs(x = "Competitive Season and Timepoint",
         y="IL-1\u03B2 (pg/ml)") +
-   scale_x_discrete(breaks = as.character(1:8),
-                    labels = c("1, EF", "1, LF", "1, ES", "1, LS",
-                               "2, EF", "2, LF", "2, ES", "2, LS")) +
-   facet_wrap(~sex) +
-   theme(legend.position = "none",  
-         axis.text.x = element_text(angle = 90, vjust = .5)))
-
-## IFNg ------------------------------------------------
-(il1b_fig <- ggplot(xc_data, 
-                    aes(x = date_for_plotting, 
-                        y = IFNg, 
-                        group = id)) +  
-   geom_point(aes(group = id), 
-              alpha = .5, 
-              size = .75, shape =1) +
-   geom_line(aes(group = id), color = "grey50", alpha = .5) +
-   # Summary points/lines
-   geom_pointrange(aes(x = date_for_plotting, 
-                       ymin = conf.low,
-                       ymax = conf.high, 
-                       y = response),
-                   inherit.aes = FALSE,
-                   data = mod_ests_final %>% 
-                     filter(outcome == "IFNg")) +
-   geom_line(aes(x = date_for_plotting, 
-                 y = response, 
-                 group = 1),
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "IFNg")) + 
-   geom_text(aes(x = date_for_plotting,
-                 y = sig_locaion + 80,
-                 label = sig),
-             size = 9,
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "IFNg")) + 
-   scale_y_log10() +
-   labs(x = "Competitive Season and Timepoint",
-        y="IFN-\u03B3 (pg/ml)") +
    scale_x_discrete(breaks = as.character(1:8),
                     labels = c("1, EF", "1, LF", "1, ES", "1, LS",
                                "2, EF", "2, LF", "2, ES", "2, LS")) +

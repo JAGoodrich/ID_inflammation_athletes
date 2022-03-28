@@ -164,7 +164,7 @@ mod_ests_final <- mod_ests %>%
 
 # Save Figure 
 ggsave(figure_2, 
-       filename = fs::path(dir_xcfig, "Changes in iron status over time.jpg"), 
+       filename = fs::path(dir_xcfig, "Figure 2 Changes in iron status over time.jpg"), 
        width = 7, height = 7)
 
 
