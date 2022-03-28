@@ -16,7 +16,7 @@ mod_output <- xc_data %>%
   mutate(
     # Run Ferritin Models
     model = map(data, 
-                ~lme(log2(outcome_value) ~ as.factor(date), 
+                ~lme(log(outcome_value) ~ as.factor(date), 
                      random = ~1|id, 
                      correlation = corExp(form=~test_number|id),
                      data = . )))
@@ -72,47 +72,10 @@ mod_ests_final <- mod_ests %>%
 
 # Get location of asterisks 
 mod_ests_final <- mod_ests_final %>% 
-  mutate(sig_locaion= conf.high*1.1)
+  mutate(sig_locaion = conf.high*1.1)
 
 
-# Figures --------------------------------------------
-# ## all cytokines---------------------------
-# (fer_fig <- xc_data  %>% 
-#    pivot_longer(cols = proteins, 
-#                 names_to = "outcome", 
-#                 values_to = "concentrations") %>%  
-#    ## Plot -----------
-#  ggplot(aes(x = date_for_plotting, 
-#             y = concentrations+.1, 
-#             group = id)) +  
-#    geom_point(aes(group = id), 
-#               alpha = .5, 
-#               size = .75) +
-#    geom_line(aes(group = id), color = "grey50", alpha = .5) +
-#    # Summary points/lines
-#    geom_pointrange(aes(x = date_for_plotting, 
-#                        ymin = conf.low,
-#                        ymax = conf.high, 
-#                        y = response),
-#                    inherit.aes = FALSE,
-#                    data = mod_ests_final ) +
-#    geom_line(aes(x = date_for_plotting, 
-#                  y = response, 
-#                  group = 1),
-#              inherit.aes = FALSE,
-#              data = mod_ests_final) + 
-#    geom_text(aes(x = date_for_plotting,
-#                  y = sig_locaion,
-#                  label = sig),
-#              size = 9,
-#              inherit.aes = FALSE,
-#              data = mod_ests_final) + 
-#    scale_y_log10() +
-#    # labs(x = NULL, y="Ferritin (ng/mL)") +
-#    facet_grid(outcome~sex, scales = "free") +
-#    theme(legend.position = "none",  
-#          axis.text.x = element_blank()))
-
+# Figures -------------------------------------------
 
 ## Hepcidin ------------------------------------------------
 (hepcidin_fig <- ggplot(xc_data, 
@@ -136,17 +99,7 @@ mod_ests_final <- mod_ests_final %>%
                  group = 1),
              inherit.aes = FALSE,
              data = mod_ests_final %>% 
-               filter(outcome == "hepcidin")) + 
-   geom_text(aes(x = date_for_plotting,
-                 y= 100,
-                 label = sig),
-             size = 9,
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "hepcidin") %>% 
-               mutate(sig_locaion = if_else(sex == "Female",
-                                            420,
-                                            sig_locaion))) + 
+               filter(outcome == "hepcidin")) +
    scale_y_log10() +
    labs(x = NULL, y="Hepcidin (ng/mL)") +
    facet_wrap(~sex) +
@@ -183,10 +136,7 @@ mod_ests_final <- mod_ests_final %>%
              size = 9,
              inherit.aes = FALSE,
              data = mod_ests_final %>% 
-               filter(outcome == "IL6")) + #%>% 
-   # mutate(sig_locaion = if_else(sex == "Female",
-   #                              420,
-   #                              sig_locaion))) + 
+               filter(outcome == "IL6")) +
    scale_y_log10() +
    labs(x = NULL, y="IL-6 (pg/ml)") +
    facet_wrap(~sex) +
@@ -260,9 +210,10 @@ mod_ests_final <- mod_ests_final %>%
              size = 9,
              inherit.aes = FALSE,
              data = mod_ests_final %>% 
-               filter(outcome == "IL1b")) + 
+               filter(outcome == "IL1b")  %>% 
+               mutate(sig = if_else(sex == "Male", "", sig) )) + 
    scale_y_log10() +
-   labs(x = "Academic Year and Timepoint",
+   labs(x = "Competitive Season and Timepoint",
         y="IL-1\u03B2 (pg/ml)") +
    scale_x_discrete(breaks = as.character(1:8),
                     labels = c("1, EF", "1, LF", "1, ES", "1, LS",
@@ -271,6 +222,45 @@ mod_ests_final <- mod_ests_final %>%
    theme(legend.position = "none",  
          axis.text.x = element_text(angle = 90, vjust = .5)))
 
+## IFNg ------------------------------------------------
+(il1b_fig <- ggplot(xc_data, 
+                    aes(x = date_for_plotting, 
+                        y = IFNg, 
+                        group = id)) +  
+   geom_point(aes(group = id), 
+              alpha = .5, 
+              size = .75, shape =1) +
+   geom_line(aes(group = id), color = "grey50", alpha = .5) +
+   # Summary points/lines
+   geom_pointrange(aes(x = date_for_plotting, 
+                       ymin = conf.low,
+                       ymax = conf.high, 
+                       y = response),
+                   inherit.aes = FALSE,
+                   data = mod_ests_final %>% 
+                     filter(outcome == "IFNg")) +
+   geom_line(aes(x = date_for_plotting, 
+                 y = response, 
+                 group = 1),
+             inherit.aes = FALSE,
+             data = mod_ests_final %>% 
+               filter(outcome == "IFNg")) + 
+   geom_text(aes(x = date_for_plotting,
+                 y = sig_locaion + 80,
+                 label = sig),
+             size = 9,
+             inherit.aes = FALSE,
+             data = mod_ests_final %>% 
+               filter(outcome == "IFNg")) + 
+   scale_y_log10() +
+   labs(x = "Competitive Season and Timepoint",
+        y="IFN-\u03B3 (pg/ml)") +
+   scale_x_discrete(breaks = as.character(1:8),
+                    labels = c("1, EF", "1, LF", "1, ES", "1, LS",
+                               "2, EF", "2, LF", "2, ES", "2, LS")) +
+   facet_wrap(~sex) +
+   theme(legend.position = "none",  
+         axis.text.x = element_text(angle = 90, vjust = .5)))
 
 
 ## Erythroferrone ------------------------------------------------
@@ -303,8 +293,8 @@ mod_ests_final <- mod_ests_final %>%
              inherit.aes = FALSE,
              data = mod_ests_final %>%
                filter(outcome == "ery", !is.na(sig))) +
-   scale_y_log10(labels = point) +
-   labs(x = "Academic Year and Timepoint",
+   scale_y_log10() +
+   labs(x = "Competitive Season and Timepoint",
         y="ERFE (ng/ml)") +
    facet_wrap(~sex) +
    scale_x_discrete(breaks = as.character(1:8),
@@ -316,41 +306,30 @@ mod_ests_final <- mod_ests_final %>%
 
 
 # Combine figures -------------------------------------------------
-figure_1 <- plot_grid(NULL, il6_fig, 
+figure_1 <- plot_grid(NULL, hepcidin_fig,
+                      NULL, il6_fig, 
                       NULL, il1a_fig,
                       NULL, il1b_fig,
                       ncol = 1, 
-                      labels = c("A. IL-6", "", 
-                                 "B. IL-1\u03B1", "", 
-                                 "C. IL-1\u03B2", ""),
+                      labels = c("A. Hepcidin", "", 
+                                 "B. IL-6", "", 
+                                 "C. IL-1\u03B1", "", 
+                                 "D. IL-1\u03B2", ""
+                                 ),
                       hjust = 0,
                       align = "v",
                       rel_heights = c(0.2, 1.0,
-                                      0.2, 1.0, 
-                                      0.2, 1.3))
+                                      0.2, 1.0,
+                                      0.2, 1.0,
+                                      0.2, 1.5))
 
-# Save Figure
+# Save Figure ----------------
 ggsave(figure_1, 
        filename = fs::path(dir_xcfig, 
                            "Figure 1 Changes in cytokines across time.jpg"), 
-       width = 6, height = 7)
+       width = 6, height = 9)
 
 
 
-# Figure 2: changes in hep and ery across time
-figure_2 <- plot_grid(NULL, hepcidin_fig, 
-                      NULL, ery_fig,
-                      ncol = 1, 
-                      labels = c("A. Hepcidin", "", 
-                                 "B. Erythroferrone"),
-                      hjust = 0,
-                      align = "v",
-                      rel_heights = c(0.2, 1.0, 
-                                      0.2, 1.3))
 
-# Save Figure
-ggsave(figure_2, 
-       filename = fs::path(dir_xcfig, 
-                           "Figure 2 Changes in cytokines across time.jpg"), 
-       width = 6, height = 5)
 

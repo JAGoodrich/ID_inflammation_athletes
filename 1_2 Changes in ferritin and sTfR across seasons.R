@@ -1,7 +1,7 @@
-# Iron Status Changes across time
-colnames(xc_data)
+# Changes in ferritin and sTfR across seasons
 
-outcomes <- c("ferritin", "stfr_logfer", "stfr", "hgb")
+# Set outcomes
+outcomes <- c("ferritin", "stfr")
 
 # Statistics -----------------------------------------
 
@@ -41,8 +41,10 @@ anova_results <- mod_output %>%
                              ~anova(.,type='marginal'))) %>% 
   dplyr::select(-data, -model) %>% 
   unnest(anova_results) %>% 
-  filter(numDF != 1) # Remove numDF = 1 (the intercept)
-
+  filter(numDF != 1) %>% # Remove numDF = 1 (the intercept)
+  janitor::clean_names() %>%
+  mutate(sig = if_else(p_value < 0.05, "*", ""))
+  
 ## Obtain model estimates ------------------------------
 mod_ests <- mod_output %>% 
   mutate(mod_ests = map(model, 
@@ -72,12 +74,12 @@ mod_ests_final <- mod_ests %>%
    ### Plot -----------
  ggplot(aes(x = date_for_plotting, 
             y = ferritin, 
-            color = norm_value)) + 
+            shape = norm_value)) + 
    geom_hline(yintercept = 30, linetype = 2) + 
    # Individual points/lines
-   geom_point(aes(group = id), alpha = .5, size = .75) +
+   geom_point(aes(group = id), alpha = .5, size = 1) +
    geom_line(aes(group = id), color = "grey50", alpha = .5) +
-   scale_color_manual(values = c("red", "grey50")) +
+   scale_shape_manual(values = c(1,19)) +
    # Summary points/lines
    geom_pointrange(aes(x = date_for_plotting, 
                        ymin = conf.low,
@@ -96,7 +98,7 @@ mod_ests_final <- mod_ests %>%
              y = 180, size = 9,
              inherit.aes = FALSE,
              data = mod_ests_final %>% 
-               filter(outcome == "ferritin")) +
+               filter(outcome == "ferritin", sex == "Male")) +
    scale_y_continuous(breaks = c(30, 60, 90, 120, 150, 180), 
                       limits = c(15,190)) +
    labs(x = NULL, y="Ferritin (ng/mL)") +
@@ -106,17 +108,19 @@ mod_ests_final <- mod_ests %>%
 
 ## sTfR ------------------------------------------
 (stfr_fig <- xc_data %>% 
-   mutate(norm_value = if_else(stfr > (1.8/0.0738), 
-                               "Elevated", "Normal")) %>% 
+   mutate(`Normal Range` = if_else(stfr > (29.5), 
+                               "Out of range", 
+                               "Within range                                                      "
+                               )) %>% 
    ### Plot -----------
  ggplot(aes(x = date_for_plotting, 
             y = stfr, 
-            color = norm_value)) + 
-   geom_hline(yintercept = (1.8/0.0738), linetype = 2) + 
+            shape = `Normal Range`)) + 
+   geom_hline(yintercept = 29.5, linetype = 2) + 
    # Individual points/lines
-   geom_point(aes(group = id), alpha = .5, size = .75) +
+   geom_point(aes(group = id), alpha = .5, size = 1) +
    geom_line(aes(group = id), color = "grey50", alpha = .5) +
-   scale_color_manual(values = c("red", "grey50")) +
+   scale_shape_manual(values = c(1,19)) +
    # Summary points/lines
    geom_pointrange(aes(x = date_for_plotting, 
                        ymin = conf.low,
@@ -136,101 +140,31 @@ mod_ests_final <- mod_ests %>%
              inherit.aes = FALSE,
              data = mod_ests_final %>% 
                filter(outcome == "stfr")) +
-   labs(x = NULL, y="sTfR (nmol/L)") +
+   labs(x = "Competitive Season and Timepoint",
+        y="sTfR (nmol/L)") +
    facet_wrap(~sex, nrow = 1) +
-   theme(legend.position = "none",  
-         axis.text.x = element_blank()))
+   scale_x_discrete(breaks = as.character(1:8),
+                    labels = c("1, EF", "1, LF", "1, ES", "1, LS",
+                               "2, EF", "2, LF", "2, ES", "2, LS")) +
+   theme(legend.position = "bottom",
+         axis.text.x = element_text(angle = 90, vjust = .5)))
 
 
-## sTfR-F index ------------------------------------------
-(stfr_f_fig <- xc_data %>% 
-   mutate(norm_value = if_else(stfr_logfer > 1.4, 
-                               "Elevated", "Normal")) %>% 
-   ### Plot -----------
- ggplot(aes(x = date_for_plotting, 
-            y = stfr_logfer, 
-            color = norm_value)) + 
-   geom_hline(yintercept = 1.4, linetype = 2) + 
-   # Individual points/lines
-   geom_point(aes(group = id), alpha = .5, size = .75) +
-   geom_line(aes(group = id), color = "grey50", alpha = .5) +
-   scale_color_manual(values = c("red", "grey50")) +
-   # Summary points/lines
-   geom_pointrange(aes(x = date_for_plotting, 
-                       ymin = conf.low,
-                       ymax = conf.high, 
-                       y = response),
-                   inherit.aes = FALSE,
-                   data = mod_ests_final %>% 
-                     filter(outcome == "stfr_logfer")) +
-   geom_line(aes(x = date_for_plotting, 
-                 y = response, 
-                 group = 1),
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "stfr_logfer")) +
-   # Asterisks for significance
-   geom_text(aes(x = date_for_plotting, label = sig),
-             y = 1.8, size = 9,
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "stfr_logfer")) +
-   labs(x = "Time point", 
-        y="sTfR-F index") +
-   facet_wrap(~sex, nrow = 1) +
-   theme(legend.position = "none"))
-
-## Hemoglobin ------------------------------------------
-(hgb_fig <- xc_data %>% 
- ggplot(aes(x = date_for_plotting, 
-            y = hgb)) + 
-   # geom_hline(yintercept = 30, linetype = 2) + 
-   # Individual points/lines
-   geom_point(aes(group = id), alpha = .5, size = .75) +
-   geom_line(aes(group = id), color = "grey50", alpha = .5) +
-   scale_color_manual(values = c("red", "grey50")) +
-   # Summary points/lines
-   geom_pointrange(aes(x = date_for_plotting, 
-                       ymin = conf.low,
-                       ymax = conf.high, 
-                       y = response),
-                   inherit.aes = FALSE,
-                   data = mod_ests_final %>% 
-                     filter(outcome == "hgb")) +
-   geom_line(aes(x = date_for_plotting, 
-                 y = response, 
-                 group = 1),
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "hgb")) +
-   geom_text(aes(x = date_for_plotting, label = sig),
-             y = 18, size = 9,
-             inherit.aes = FALSE,
-             data = mod_ests_final %>% 
-               filter(outcome == "hgb")) +
-   # scale_y_continuous(breaks = c(30, 60, 90, 120, 150, 180), 
-   #                    limits = c(15,190)) +
-   labs(x = NULL, y="Hemoglobin (g/dL)") +
-   facet_wrap(~sex, nrow = 1) +
-   theme(legend.position = "none",  
-         axis.text.x = element_blank()))
 
 # Combine figures -------------------------------------------------
-(figure_1 <- plot_grid(NULL, fer_fig, 
+(figure_2 <- plot_grid(NULL, fer_fig, 
                        NULL, stfr_fig, 
-                       NULL, stfr_f_fig,
                        ncol = 1, 
                        labels = c("A. Ferritin", "", 
-                                  "B. sTfR", "", 
-                                  "C. sTfR Ferritin Index", ""),
+                                  "B. Soluble Transferrin Receptor", ""),
                        hjust = 0,
-                       rel_heights = c(0.2, 1.0,
-                                       0.2, 1.0, 
-                                       0.2, 1.0)))
+                       align = "v",
+                       rel_heights = c(0.1, 1.0,
+                                       0.1, 1.5)))
 
 # Save Figure 
-ggsave(figure_1, 
+ggsave(figure_2, 
        filename = fs::path(dir_xcfig, "Changes in iron status over time.jpg"), 
-       width = 6, height = 9)
+       width = 7, height = 7)
 
 

@@ -1,23 +1,15 @@
 ---
-title: "XC Figures"
+title: "XC Analysis"
 author: "Jesse Goodrich"
-date: "12/28/2019"
+date: "March 2022"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, fig.width=8, fig.height = 6.5, cache = FALSE)
 library(tidyverse)
-library(table1)
 library(emmeans)
-library(brglm)
-library(ggpmisc)
 library(car)
-library(gridExtra)
-library(lmerTest)
-library(grid)
-library(gtools)
-library(MuMIn)
 library(cowplot)
 library(broom)
 library(broom.mixed)
@@ -33,106 +25,12 @@ source(here::here("!load_xc_data.r"))
 
 Table 2
 ```{r Table 2}
-table(id$iron_def_acute , id$sex)
-with(id %>% filter(sex == "Female", ery < 100), hist(stfr))
-
-id <- id %>% 
-  mutate(male_female_iron_def = if_else((iron_def_acute == "ID") & (sex == "Male"), "ID", as.character(acute_chronic_id)))
-
-table1::table1(~ hgb + hct + ferritin + hepcidin + 
-                 stfr + ery_cor + bili + percent_retic + IL1a + IL1b + IL2 + 
-                 IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa  | sex + male_female_iron_def,
-               data = id,
-               overall = FALSE)
-ggplot(id, aes(cpk)) + 
-  geom_density() + 
-  facet_wrap(~sex, nrow = 2)
-
-# Normal Vars
-summaryBy(formula = hgb + hct + percent_retic + ferritin +  
-            stfr + bili + cpk + ldh~ sex * male_female_iron_def,
-          data = id %>%
-            as.data.frame(),
-          FUN = function(x){avg_sd_fxn(x, include.n = FALSE, n.digits = 0)}, 
-          keep.names = TRUE) %>%
-  as_tibble() %>% t() %>% noquote()
-
-# Non normal vars
-summaryBy(formula = hepcidin + ery_cor + IL1a + IL1b + IL2 +  
-            IL4 + IL6 +IL8 + IL10 + IL12p70 + IFNg + TNFa ~ sex * male_female_iron_def, 
-          
-          data = id %>%
-            as.data.frame(),
-          FUN = function(x){paste(sprintf("%.1f", round(median(x, na.rm = T), 1)), 
-                                  " (",
-                                  sprintf("%.1f", round(IQR(x, na.rm = T), 1)), 
-                                  ")",  sep = "")
-          }, 
-          keep.names = TRUE) %>%
-  as_tibble() %>% t() %>% noquote()
-
-
+source(here::here("1_0 Descriptive Statistics.R"))
+kableExtra::kable(table_2)
 ```
 
-Sup table 1
+
 ```{r Table 2}
-table(id$acute_chronic_id_group , id$sex)
-
-table1::table1(~ hepcidin | sex * nationals,
-               data = fsd,
-               overall = FALSE)
-
-library(flextable)
-
-summaryBy(formula = hgb + hct + ferritin + hepcidin + 
-            stfr + ery_cor + bili + percent_retic + IL1a + IL1b + IL2 + 
-            IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa ~ sex,
-          data = fsd %>%
-            as.data.frame(),
-          FUN = function(x){avg_sd_fxn(x, include.n = FALSE)}, 
-          keep.names = TRUE) %>%
-  as_tibble() %>% t() %>% noquote()
-
-
-table(id$iron_def_avg)
-summaryBy(formula = hgb + hct + ferritin + hepcidin + stfr +
-            ery_cor + bili + percent_retic + IL1a + IL1b + IL2 +  
-            IL4 + IL6 +IL8 + IL10+ IL12p70 + IFNg + TNFa ~ sex * nationals, 
-          
-          data = fsd %>%
-            as.data.frame(),
-          FUN = function(x){paste(sprintf("%.1f", round(median(x, na.rm = T), 1)), 
-                                  " (",
-                                  sprintf("%.1f", round(IQR(x, na.rm = T), 1)), 
-                                  ")",  sep = "")
-          }, 
-          keep.names = TRUE) %>%
-  as_tibble() %>% t() %>% noquote()
-
-library(tableone)
-
-myvars <- c("hgb", "hct", "ferritin", "hepcidin", "stfr",
-            "ery_cor", "bili", "percent_retic", "IL1a", "IL1b", "IL2", 
-            "IL4", "IL6", "IL8", "IL10", "IL12p70", "IFNg", "TNFa")
-
-nonnormal <- c("hepcidin", "ery_cor", "IL1a", "IL1b", "IL2", 
-               "IL4", "IL6", "IL8", "IL10", "IL12p70", "IFNg", "TNFa")
-
-
-tab3 <- CreateTableOne(vars = myvars, 
-                       strata = "nationals" , 
-                       data = fsd %>% filter(sex == "Female"))
-print(tab3, nonnormal = nonnormal, formatOptions = list(big.mark = ","))
-
-
-data %>% 
-  filter(!is.na(hct), sex == "Male") %>%
-  summarise(pct = (sum(hct > 51.0 | hct < 37.5)/length(hct)))
-
-data %>% 
-  filter(!is.na(hct), sex == "Female") %>%
-  summarise(pct = (sum(hct > 46.6 | hct < 34.0)/length(hct)))
-
 
 ```
 

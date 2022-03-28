@@ -5,6 +5,9 @@ dir_home <- dirname(here::here())
 
 
 dir_xcfig <- here::here("figures")
+
+dir_xctab <- here::here("tables")
+
 # # raw data folder
 # dir_data <- fs::path(dir_home, "0_Data")
 # 
