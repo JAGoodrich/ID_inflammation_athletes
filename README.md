@@ -1,1 +1,3 @@
 # ID_inflammation_athletes
+
+This github repository provides all of the code for the analysis performed for the manuscript titled "Iron status and homeostasis Across Two Competitive Seasons in NCAA Division-I Collegiate Cross-Country Runners Residing at Low Altitude" (Authors: Jesse A. Goodrich, Dillon J. Frisco, Sewan Kim, Karin VanBaak, Marissa Holliday, Miguel Rueda, Sourav Poddar, William C. Byrnes).

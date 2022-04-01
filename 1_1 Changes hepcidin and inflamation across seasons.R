@@ -292,3 +292,66 @@ ggsave(figure_1,
 
 
 
+
+
+
+
+# Supplemental figure 1: All cytokines ------------------------------------
+
+mod_ests_reduced <- mod_ests_final  %>% 
+  filter(!(outcome %in% c("ery", "hepcidin"))) %>% 
+  mutate(sig.location = 2.5*conf.high, 
+         sig = if_else(outcome == "IL1b" & sex == "Male", "", sig))
+  
+# pivot outcome data longer on outcomes 
+xc_data_l <- xc_data %>% 
+  pivot_longer(cols = all_of(proteins), 
+               names_to = "outcome", 
+               values_to = "conc") %>% 
+  filter(!(outcome %in% c("ery", "hepcidin")))
+
+## all cytokines ------------------------------------------------
+(supplemental_figure_1 <- ggplot(xc_data_l,
+                   aes(x = date_for_plotting,
+                       y = conc,
+                       group = id)) +
+   geom_point(aes(group = id),
+              alpha = .5,
+              size = .75, shape =1) +
+   geom_line(aes(group = id), color = "grey50", alpha = .5) +
+   # Summary points/lines
+   geom_pointrange(aes(x = date_for_plotting,
+                       ymin = conf.low,
+                       ymax = conf.high,
+                       y = response),
+                   inherit.aes = FALSE,
+                   data = mod_ests_reduced) +
+   geom_line(aes(x = date_for_plotting,
+                 y = response,
+                 group = 1),
+             inherit.aes = FALSE,
+             data = mod_ests_reduced) +
+   geom_text(aes(x = date_for_plotting,
+                 y = sig.location,
+                 label = sig),
+             size = 9,
+             inherit.aes = FALSE,
+             data = mod_ests_reduced %>%
+               filter(!is.na(sig))) +
+   scale_y_log10() +
+   labs(x = "Competitive Season and Timepoint",
+        y="Concentration (pg/ml)") +
+   facet_grid(outcome~sex, scales = "free_y") +
+   scale_x_discrete(breaks = as.character(1:8),
+                    labels = c("1, EF", "1, LF", "1, ES", "1, LS",
+                               "2, EF", "2, LF", "2, ES", "2, LS")) +
+   theme(legend.position = "none",
+         axis.text.x = element_text(angle = 90, vjust = .5)))
+
+
+# Save Figure ----------------
+ggsave(supplemental_figure_1, 
+       filename = fs::path(dir_xcfig, 
+                           "Figure S1 Changes in all cytokines across time.jpg"), 
+       width = 6, height = 14)
+

@@ -93,6 +93,30 @@ fer_hep
 stfr_hep
 
 
+# Hepcidin IL6 
+# Hepcidin vs. stfr -------------------------
+(il6_hep <- xc_data  %>% 
+   filter(!is.na(hepcidin), !is.na(IL6), !is.na(id_peeling)) %>% 
+   rename(`Iron Deficiency:` = id_peeling) %>% 
+   ggplot(aes(x = IL6, 
+              y = hepcidin, 
+              group = id, 
+              shape = `Iron Deficiency:`, 
+              alpha = `Iron Deficiency:`)) + 
+   geom_point() + 
+   geom_path(alpha = .25) +
+   scale_x_log10() +
+   scale_y_log10() +
+   scale_shape_manual(values = c(19, 1, 2)) +
+   scale_alpha_manual(values = c(.5, .75, .75)) +
+   ylab("Hepcidin (ng/mL)") +
+   xlab("IL-6 (pg/mL)") +
+   facet_wrap(~sex) + 
+   theme(legend.position = "bottom"))
+il6_hep
+
+
+
 # Combine figures -------------------------------------------------
 (figure_3 <- plot_grid(NULL, fer_hep, 
                        NULL, stfr_hep, 
@@ -109,3 +133,11 @@ ggsave(figure_3,
        filename = fs::path(dir_xcfig, 
                            "Figure 3 hepcidin ID scatterplots.jpg"), 
        width = 7, height = 6)
+
+
+
+# Save IL-6 Figure 
+ggsave(il6_hep, 
+       filename = fs::path(dir_xcfig, 
+                           "Supplemental Figure 1 hepcidin IL6 scatterplot.jpg"), 
+       width = 7, height = 4)

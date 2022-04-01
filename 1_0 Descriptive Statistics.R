@@ -1,5 +1,19 @@
 # Tables and descriptive
 
+
+# Get number of visits 
+xc_data %>% 
+  group_by(id) %>% 
+  summarise(n_visits = length(id)) %>% 
+  ungroup() %>% 
+  summarise(n_visits_median = median(n_visits), 
+            n_visits_iqr = IQR(n_visits),
+            min = min(n_visits), 
+            max = max(n_visits))
+  
+
+
+
 # Get maximum severuty of ID
 id_once <- xc_data %>% 
   mutate(id_peeling = as.ordered(id_peeling)) %>%
@@ -25,7 +39,8 @@ chisq.test(table(id_once$sex, id_once$id))
 summary_data <- xc_data %>% 
   mutate(id_peeling = as.ordered(id_peeling)) %>%
   group_by(id, sex, nationals) %>% 
-  summarise(across(where(is.numeric), ~mean(., na.rm = TRUE)), 
+  summarise(n_visits = length(id), 
+            across(where(is.numeric), ~mean(., na.rm = TRUE)), 
             id_peeling = max(id_peeling)) %>% 
   ungroup()
 
