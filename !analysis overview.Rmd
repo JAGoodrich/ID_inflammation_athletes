@@ -15,6 +15,7 @@ library(broom)
 library(broom.mixed)
 library(janitor)
 library(nlme)
+library(XML)
 
 # Set ggplot theme
 theme_set(theme_cowplot())
@@ -34,22 +35,42 @@ kableExtra::kable(table_2)
 ```{r}
 source(here::here(("1_1 Changes hepcidin and inflamation across seasons.R")))
 figure_1
+mod_output_chgovrtime_results
 ```
 
 ## Figure 2
 ```{r}
 source(here::here("1_2 Changes in ferritin and sTfR across seasons.R"))
 figure_2
+mod_output_id_tme_results
 ```
 
 ## Figure 3
 ```{r}
 source(here::here("1_3 Hepcidin iron status associations.R"))
 figure_3
+hepcidin_outcomes_res
 ```
 
 ## Figure 4
 ```{r}
 source(here::here("1_4 Association of cytokines with hepcidin and iron status.R"))
 figure_4
+cytokine_outcome_res
+```
+
+## Combine Results
+```{r}
+out <- bind_rows(mod_output_id_tme_results, 
+                 mod_output_chgovrtime_results) %>% 
+    arrange(outcome) %>% 
+  filter(outcome %in% c("ferritin", "stfr", "hepcidin", "IL6")) %>% 
+  select(-p, -description) %>% 
+  pivot_wider(id_cols = c(outcome, Predictors),
+              names_from = sex, 
+              values_from = c(Estimates, CI)) %>% 
+  ungroup() %>% 
+  dplyr::select(outcome, Predictors, contains("_Male"), contains("Female"))
+
+readr::write_excel_csv(out, here::here("mod_output_results.csv"))
 ```

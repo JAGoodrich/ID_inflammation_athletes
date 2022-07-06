@@ -1,7 +1,13 @@
-# Scatter Plots
-
+# Hepcidin versus ferritin and stfr 
 
 # Statistics ----------------------
+# Run all models, stratified by sex 
+# Pivot_longer: Reshapes data from wide to long format, with a single
+# column for each outcome and a single column for the 
+# concentration (named "outcome_value")
+# group_by: groups data by sex and outcome (ie, each protein) to fit a 
+# separate model for each outcome/sex combination 
+# mutate/map: runs the actual lme model 
 mod_output_hep_id <- xc_data %>% 
   tidylog::pivot_longer(cols = all_of(c("ferritin", "stfr")), 
                         names_to = "outcome", 
@@ -29,7 +35,15 @@ mod_output_hep_id <- xc_data %>%
                      round(digits = 1) %>% 
       as_tibble(rownames = "effect")),
     coef_ci = map2(mod_summary, mod_ests, 
-                   ~full_join(.x, .y))) %>% 
+                   ~full_join(.x, .y)), 
+    mod_summary = map(model_full, 
+                      ~sjPlot::tab_model(.x)), 
+    mod_summary = map(mod_summary, 
+                      ~data.frame(readHTMLTable(htmlParse(.x))[1]) %>% 
+                        row_to_names(row_number = 1)))
+
+
+mod_output_hep_id_effect_est <- mod_output_hep_id %>% 
   select(-c(data, model_full, mod_summary, mod_ests)) %>%
   unnest(coef_ci) %>% 
   ungroup() %>%
@@ -37,30 +51,38 @@ mod_output_hep_id <- xc_data %>%
   filter(str_detect(effect, "log2"))
 
 
+# Get all model results
+hepcidin_outcomes_res <- mod_output_hep_id %>%
+  select(-data, -model_full, -mod_ests, -coef_ci) %>%
+  unnest(mod_summary) %>%
+  mutate(description = "Associations of hepcidin with iron homeostasis biomarkers") %>%
+  select(description, everything())
+
 #View info about the one outlier participant
 # View(xc_data %>% select(id, visit,sex, hepcidin, ferritin, stfr, id_peeling))
-
 
 # Ferritin vs. Hepcidin -------------------------
 (fer_hep <- xc_data %>% 
    mutate(normrange = if_else(ferritin < 30, 
                               "Out of range", 
                               "Within range")) %>% 
+   filter(visit_ordered != "Early Fall, Year 1") %>%
    ggplot(aes(x = hepcidin, 
               y = ferritin, 
               group = id, 
               shape = normrange, 
               alpha = normrange)) + 
    geom_hline(yintercept = 30,  linetype = 2, color = "grey50") +
-   geom_point() + 
-   geom_path(alpha = .25) +
+   geom_point(alpha = .6) + 
+   geom_path(alpha = .1) +
    scale_x_log10() +
    scale_y_log10() +
    scale_shape_manual(values = c(1,19)) +
    scale_alpha_manual(values = c(.75, .5)) +
    xlab("Hepcidin (ng/mL)") +
    ylab("Ferritin (ng/mL)") +
-   facet_wrap(~sex) + 
+   facet_wrap(~sex) +
+   # facet_grid(sex ~ visit_ordered, drop = TRUE) + 
    theme(legend.position = "none"))
 fer_hep
 

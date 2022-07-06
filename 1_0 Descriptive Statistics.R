@@ -10,9 +10,6 @@ xc_data %>%
             n_visits_iqr = IQR(n_visits),
             min = min(n_visits), 
             max = max(n_visits))
-  
-
-
 
 # Get maximum severuty of ID
 id_once <- xc_data %>% 
@@ -20,7 +17,6 @@ id_once <- xc_data %>%
   group_by(id, sex, nationals) %>% 
   summarise(id = max(id_peeling, na.rm = TRUE)) %>% 
   ungroup()
-
 
 # Get percent ID at each stage
 id_once %>% 
@@ -33,8 +29,6 @@ id_once %>%
 # Test for differences between males and females
 chisq.test(table(id_once$sex, id_once$id))
 
-
-
 # Table 2
 summary_data <- xc_data %>% 
   mutate(id_peeling = as.ordered(id_peeling)) %>%
@@ -43,7 +37,6 @@ summary_data <- xc_data %>%
             across(where(is.numeric), ~mean(., na.rm = TRUE)), 
             id_peeling = max(id_peeling)) %>% 
   ungroup()
-
 
 #Overall statistics
 table_2_overall <- summary_data %>%
@@ -67,7 +60,6 @@ table_2_overall <- summary_data %>%
   column_to_rownames("sex") %>% 
   t(.) %>% 
   as_tibble(rownames = "Outcome")
-
 
 #by nationals statistics
 table_2_nats <- summary_data %>%
@@ -111,3 +103,23 @@ table_2 <- tidylog::full_join(table_2_nats, table_2_overall) %>%
 write_csv(table_2, 
           file = fs::path(dir_xctab, 
                           "Table 2.csv"))
+
+
+
+# 95% CI for differences in mean outcome by sex
+summary_data %>%
+  summarise(`[Hb] (g/dL)`       = confint(lm(hgb ~ sex))[2,],
+            `Ferritin (ng/ml)`  = confint(lm(ferritin ~ sex))[2,], 
+            `sTfR (nmol/L)`     = confint(lm(stfr ~ sex))[2,], 
+            `Hepcidin (nmol/L)` = confint(lm(hepcidin ~ sex))[2,], 
+            `IL-1a (pg/ml)`     = confint(lm(IL1a ~ sex))[2,], 
+            `IL-1b (pg/ml)`     = confint(lm(IL1b ~ sex))[2,], 
+            `IL-2 (pg/ml)`      = confint(lm(IL2 ~ sex))[2,], 
+            `IL-4 (pg/ml)`      = confint(lm(IL4 ~ sex))[2,], 
+            `IL-6 (pg/ml)`      = confint(lm(IL6 ~ sex))[2,], 
+            `IL-8 (pg/ml)`      = confint(lm(IL8 ~ sex))[2,], 
+            `IL-10 (pg/ml)`     = confint(lm(IL10 ~ sex))[2,], 
+            `IL-12p70 (pg/ml)`  = confint(lm(IL12p70 ~ sex))[2,], 
+            `IFN-g (pg/ml)`     = confint(lm(IFNg ~ sex))[2,], 
+            `TNF-a (pg/ml)`     = confint(lm(TNFa ~ sex))[2,], 
+            `ERFE (ng/ml)`      = confint(lm(ery ~ sex))[2,])

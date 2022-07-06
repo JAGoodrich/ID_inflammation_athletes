@@ -2,7 +2,18 @@
 # on hematological parameters 
 
 
-## Run all models ------------------------------------
+## Run all models, stratified by sex ------------------------------------
+# Pivot_longer: Reshapes data from wide to long format, with a single
+# column for each outcome and a single column for the 
+# concentration (named "outcome_value")
+# Second pivot longer:  Reshapes data from wide to long format, with a single
+# column for each proteine and a single column for the 
+# concentration (named "cytokine contcentration")
+# group_by: groups data by sex, outcome, and cytokine to fit a 
+# separate model for each outcome/cytokine/sex combination 
+# mutate/map: runs the actual lme model 
+
+
 mod_output <- xc_data %>% 
   tidylog::pivot_longer(cols = all_of(c("hgb", "ferritin","hepcidin", "stfr")), 
                         names_to = "outcome", 

@@ -5,8 +5,14 @@ proteins <- c("IFNg","IL1a","IL1b","IL2","IL4",
 
 # Statistics -----------------------------------------
 
-## Run all models ------------------------------------
-mod_output <- xc_data %>% 
+## Run all models, stratified by sex ------------------------------------
+# Pivot_longer: Reshapes data from wide to long format, with a single
+# column for each protein name (named "outcome") and a single column for the 
+# protein concentration (named "outcome_value")
+# group_by: groups data by sex and outcome (ie, each protein) to fit a 
+# separate model for each protein and sex combination 
+# mutate/map: runs the actual lme model 
+mod_output_chgovrtime <- xc_data %>% 
   tidylog::pivot_longer(cols = all_of(proteins), 
                         names_to = "outcome", 
                         values_to = "outcome_value") %>% 
@@ -18,18 +24,48 @@ mod_output <- xc_data %>%
                 ~lme(log(outcome_value) ~ as.factor(date), 
                      random = ~1|id, 
                      correlation = corExp(form=~test_number|id),
-                     data = . )))
+                     data = . )), 
+    mod_summary = map(model, 
+                      ~sjPlot::tab_model(.x)), 
+    mod_summary = map(mod_summary, 
+                      ~data.frame(readHTMLTable(htmlParse(.x))[1]) %>% 
+                        row_to_names(row_number = 1)), 
+    cor_exp_range = map(model, function(x){
+      exp(as.numeric(x$modelStruct$corStruct))}))
+
+# Get all results 
+mod_output_chgovrtime_tmp <- mod_output_chgovrtime %>% 
+  select(-data, -model) %>% 
+  unnest(mod_summary) 
+
+# Get expCor Range
+cor_exp_range <- mod_output_chgovrtime %>% 
+  select(-data, -model, -mod_summary) %>% 
+  unnest(cor_exp_range) %>% 
+  ungroup() %>% 
+  mutate(cor_exp_dist_1mo = exp(-1/(cor_exp_range))) %>% 
+  pivot_longer(cols = c(cor_exp_range, cor_exp_dist_1mo), 
+               names_to = "Predictors", 
+               values_to = "Estimates") %>% 
+  mutate(Estimates = formatC(Estimates))
+
+# Bind Rows for final output
+mod_output_chgovrtime_results <- bind_rows(mod_output_chgovrtime_tmp, 
+                                       cor_exp_range) %>% 
+  mutate(description = "Changes in biomarkers over time") %>% 
+  select(description, everything())
+
 
 ## Examine residual plots by hand (change "1" for different models) -------------
 i = 1
-plot(mod_output$model[[i]])
+plot(mod_output_chgovrtime$model[[i]])
 # Normal plot of standardized residuals by gender
-qqnorm(mod_output$model[[i]], ~resid(., type = "p"))
+qqnorm(mod_output_chgovrtime$model[[i]], ~resid(., type = "p"))
 # Normal plot of standardized residuals by gender
-qqnorm(mod_output$model[[i]], ~ranef(.))
+qqnorm(mod_output_chgovrtime$model[[i]], ~ranef(.))
 
 ## Get p values for effect estimates -------------------
-effect_est_p <- mod_output %>% 
+effect_est_p <- mod_output_chgovrtime %>% 
   mutate(model_tidy = map(model, ~tidy(.))) %>% 
   dplyr::select(-data, -model) %>% 
   unnest(model_tidy) %>% 
@@ -40,7 +76,7 @@ effect_est_p <- mod_output %>%
 
 
 ## Calculate type-III/marginal F test -------------------
-anova_results <- mod_output %>% 
+anova_results <- mod_output_chgovrtime %>% 
   mutate(anova_results = map(model, 
                              ~car::Anova(.))) %>% 
   dplyr::select(-data, -model) %>% 
@@ -51,7 +87,7 @@ anova_results <- mod_output %>%
 
 
 ## Obtain model estimates ------------------------------
-mod_ests <- mod_output %>% 
+mod_ests <- mod_output_chgovrtime %>% 
   mutate(mod_ests = map(model, 
                         ~emmeans(.,~date, type = "response") %>% 
                           tidy(conf.int = TRUE, 
@@ -274,7 +310,7 @@ figure_1 <- plot_grid(NULL, hepcidin_fig,
                                  "B. IL-6", "", 
                                  "C. IL-1\u03B1", "", 
                                  "D. IL-1\u03B2", ""
-                                 ),
+                      ),
                       hjust = 0,
                       align = "v",
                       rel_heights = c(0.2, 1.0,
@@ -302,7 +338,7 @@ mod_ests_reduced <- mod_ests_final  %>%
   filter(!(outcome %in% c("ery", "hepcidin"))) %>% 
   mutate(sig.location = 2.5*conf.high, 
          sig = if_else(outcome == "IL1b" & sex == "Male", "", sig))
-  
+
 # pivot outcome data longer on outcomes 
 xc_data_l <- xc_data %>% 
   pivot_longer(cols = all_of(proteins), 
@@ -312,9 +348,9 @@ xc_data_l <- xc_data %>%
 
 ## all cytokines ------------------------------------------------
 (supplemental_figure_1 <- ggplot(xc_data_l,
-                   aes(x = date_for_plotting,
-                       y = conc,
-                       group = id)) +
+                                 aes(x = date_for_plotting,
+                                     y = conc,
+                                     group = id)) +
    geom_point(aes(group = id),
               alpha = .5,
               size = .75, shape =1) +

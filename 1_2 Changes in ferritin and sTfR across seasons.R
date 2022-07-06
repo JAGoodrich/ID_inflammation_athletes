@@ -5,8 +5,14 @@ outcomes <- c("ferritin", "stfr")
 
 # Statistics -----------------------------------------
 
-## Run all models ------------------------------------
-mod_output <- xc_data %>% 
+## Run all models, stratified by sex ------------------------------------
+# Pivot_longer: Reshapes data from wide to long format, with a single
+# column for each outcome and a single column for the 
+# concentration (named "outcome_value")
+# group_by: groups data by sex and outcome (ie, each protein) to fit a 
+# separate model for each outcome/sex combination 
+# mutate/map: runs the actual lme model 
+mod_output_id_tme <- xc_data %>% 
   tidylog::pivot_longer(cols = all_of(outcomes), 
                         names_to = "outcome", 
                         values_to = "outcome_value") %>% 
@@ -18,14 +24,45 @@ mod_output <- xc_data %>%
   mutate(
     # Run iron Models
     model = map(data, 
-                ~lme((outcome_value) ~ date, 
+                ~lme(log(outcome_value) ~ date, 
                      random = ~1|id, 
                      correlation = corExp(form=~test_number|id),
-                     data = .)))
+                     data = .)), 
+    mod_summary = map(model,
+                      ~sjPlot::tab_model(.x)),
+    mod_summary = map(mod_summary,
+                      ~data.frame(readHTMLTable(htmlParse(.x))[1]) %>%
+                        row_to_names(row_number = 1)),
+    cor_exp_range = map(model, function(x){
+      exp(as.numeric(x$modelStruct$corStruct))}))
+
+
+# Get model results 
+mod_output_id_tmp <- mod_output_id_tme %>% 
+  select(-data, -model, -cor_exp_range) %>% 
+  unnest(mod_summary) %>% 
+  ungroup()
+  
+# Get expCor Range
+cor_exp_range <- mod_output_id_tme %>% 
+  select(-data, -model, -mod_summary) %>% 
+  unnest(cor_exp_range) %>% 
+  ungroup() %>% 
+  mutate(cor_exp_dist_1mo = exp(-1/(cor_exp_range))) %>% 
+  pivot_longer(cols = c(cor_exp_range, cor_exp_dist_1mo), 
+               names_to = "Predictors", 
+               values_to = "Estimates") %>% 
+  mutate(Estimates = formatC(Estimates))
+
+# Bind Rows for final output
+mod_output_id_tme_results <- bind_rows(mod_output_id_tmp, 
+                                       cor_exp_range) %>% 
+  mutate(description = "Changes in Iron Status biomarkers over time") %>% 
+  select(description, everything())
 
 
 ## Get p values for effect estimates -------------------
-effect_est_p <- mod_output %>% 
+effect_est_p <- mod_output_id_tme %>% 
   mutate(model_tidy = map(model, ~tidy(.))) %>% 
   dplyr::select(-data, -model) %>% 
   unnest(model_tidy) %>% 
@@ -36,7 +73,7 @@ effect_est_p <- mod_output %>%
 
 
 ## Calculate type-III/marginal F test -------------------
-anova_results <- mod_output %>% 
+anova_results <- mod_output_id_tme %>% 
   mutate(anova_results = map(model, 
                              ~anova(.,type='marginal'))) %>% 
   dplyr::select(-data, -model) %>% 
@@ -46,7 +83,7 @@ anova_results <- mod_output %>%
   mutate(sig = if_else(p_value < 0.05, "*", ""))
   
 ## Obtain model estimates ------------------------------
-mod_ests <- mod_output %>% 
+mod_ests <- mod_output_id_tme %>% 
   mutate(mod_ests = map(model, 
                         ~emmeans(.,~date, type = "response") %>% 
                           tidy(conf.int = TRUE, 

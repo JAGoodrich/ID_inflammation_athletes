@@ -8,18 +8,28 @@ proteins <- c("IFNg","IL1a","IL1b","IL2","IL4",
 
 # Statistics -----------------------------------------
 
-## Run all models ------------------------------------
+## Run all models, stratified by sex ------------------------------------
+# Pivot_longer: Reshapes data from wide to long format, with a single
+# column for each outcome and a single column for the 
+# concentration (named "outcome_value")
+# Second pivot longer:  Reshapes data from wide to long format, with a single
+# column for each protein and a single column for the 
+# concentration (named "cytokine concentration")
+# group_by: groups data by sex, outcome, and cytokine to fit a 
+# separate model for each outcome/cytokine/sex combination 
+# mutate/map: runs the actual lme model 
+
 mod_output <- xc_data %>% 
   tidylog::pivot_longer(cols = all_of(outcomes), 
                         names_to = "outcome", 
                         values_to = "outcome_value") %>% 
   tidylog::pivot_longer(cols = all_of(str_c(proteins)), 
-                        names_to = "cytokine", 
+                        names_to = "explanatory_variable", 
                         values_to = "cytokine_concentration") %>% 
   filter(!is.na(outcome_value), 
          !is.na(cytokine_concentration)) %>% 
   droplevels() %>% 
-  group_by(sex, outcome, cytokine) %>% 
+  group_by(sex, outcome, explanatory_variable) %>% 
   nest() %>% 
   mutate(
     # Run full model
@@ -29,7 +39,21 @@ mod_output <- xc_data %>%
                           random = ~1|id, 
                           correlation = corExp(form=~test_number|id),
                           data = ., 
-                          na.action = na.exclude )))
+                          na.action = na.exclude )), 
+    mod_summary = map(model_full, 
+                      ~sjPlot::tab_model(.x)), 
+    mod_summary = map(mod_summary, 
+                      ~data.frame(readHTMLTable(htmlParse(.x))[1]) %>% 
+                        row_to_names(row_number = 1)))
+
+
+# Get all model results
+cytokine_outcome_res <- mod_output %>% 
+  select(-data, -model_full) %>% 
+  unnest(mod_summary) %>% 
+  mutate(description = "Associations of cytokine concentrations with iron homeostasis biomarkers") %>% 
+  select(description, everything())
+
 
 ## Obtain model estimates ------------------------------
 mod_ests <- mod_output %>% 
